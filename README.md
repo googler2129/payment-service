@@ -169,29 +169,103 @@ type ContractorRepository interface {
 }
 ```
 
-This maintains consistent patterns across our codebase while not unnecessarily complicating non-versioned entities.
+#### Static Repository Example
+
+**Before (Old approach - writing custom methods for each entity):**
+```go
+// Before: Each repository had to implement its own GET methods
+type ContractorRepository interface {
+    Create(ctx context.Context, contractor *Contractor) error
+    Update(ctx context.Context, contractor *Contractor) error
+    Delete(ctx context.Context, contractor *Contractor) error
+    GetByID(ctx context.Context, id string) (*Contractor, error)
+    GetByCompanyID(ctx context.Context, companyID string) ([]Contractor, error)
+    // Many more custom methods...
+}
+
+// Implementation required writing each method
+type contractorRepositoryImpl struct {
+    db *postgres.DbCluster
+}
+
+func (r *contractorRepositoryImpl) GetByID(ctx context.Context, id string) (*Contractor, error) {
+    var result Contractor
+    err := r.db.GetSlaveDB(ctx).Where("id = ?", id).First(&result).Error
+    return &result, err
+}
+
+func (r *contractorRepositoryImpl) GetByCompanyID(ctx context.Context, companyID string) ([]Contractor, error) {
+    var results []Contractor
+    err := r.db.GetSlaveDB(ctx).Where("company_id = ?", companyID).Find(&results).Error
+    return results, err
+}
+
+// And so on for each method...
+```
+
+**After (New approach - using generics):**
+```go
+// After: Simply embed the generic interface
+type ContractorRepository interface {
+    static.StaticRepository[Contractor]
+}
+
+// Contractor must implement the Static interface
+type Contractor struct {
+    ID        string `gorm:"column:id;primaryKey"`
+    Name      string `gorm:"column:name"`
+    CompanyID string `gorm:"column:company_id"`
+    // Other fields...
+}
+
+// Implement the SetID method required by the Static interface
+func (c *Contractor) SetID(id string) {
+    c.ID = id
+}
+
+// Creating the repository is now a one-liner
+func NewContractorRepository(db *postgres.DbCluster) ContractorRepository {
+    return static.NewStaticRepository[Contractor](db)
+}
+
+// Using the repository
+func ExampleUsage(ctx context.Context, repo ContractorRepository) {
+    // Create a contractor
+    contractor := &Contractor{
+        Name:      "John Doe",
+        CompanyID: "comp_123",
+    }
+    repo.Create(ctx, contractor)
+    
+    // Get by conditions
+    filter := map[string]interface{}{"company_id": "comp_123"}
+    contractors, err := repo.GetAllByConditions(ctx, filter)
+    
+    // Get single record
+    singleFilter := map[string]interface{}{"id": "some-id"}
+    contractorRecord, err := repo.GetByConditions(ctx, singleFilter)
+    
+    // Update
+    if contractorRecord != nil {  // Note: checking pointer directly, not dereferencing
+        repo.UpdateByCondition(ctx, 
+            map[string]interface{}{"id": (*contractorRecord).ID},
+            contractorRecord,
+        )
+    }
+}
+```
+
+This removes all the boilerplate code in repositories and no code would be needed for GET/UPDATE/CREATE/DELETE operations. 
 
 ### Cross-Language Compatibility Solution
 
-To address the challenge of supporting both Django and Golang services, our language-agnostic solution leverages database VIEWS:
+To address the challenge of supporting both Django and Golang services, we can use database VIEWS:
 
 ```sql
 CREATE VIEW latest_jobs AS
 SELECT * FROM job WHERE is_latest = true;
 ```
 
-This approach:
-1. Centralizes the SCD filtering logic in the database layer
-2. Provides consistent access pattern regardless of programming language
-3. Allows Django ORM and GORM to query a simple view without SCD complexity
-4. Maintains all versioning capabilities when needed
-
-## Implementation Notes
-
-- When working with generic pointer types, always check the pointer itself (`record == nil`) rather than dereferencing (`*record == nil`) for nil checks
-- The combination of ID (consistent across versions) and UID (unique per version) maintains both identity and uniqueness
-- All version changes use transactions to ensure consistency
-- Our implementation automatically handles UID generation, version increments, and is_latest flag updates
 
 ## Getting Started
 
