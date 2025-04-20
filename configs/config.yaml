@@ -1,0 +1,37 @@
+server:
+  port: ":8082"
+
+service:
+  name: "payment-service"
+
+env: "staging"
+
+log:
+  level: "debug"
+  format: "json"
+  request: true
+  response: false
+
+redis:
+  clusterMode: false
+  hosts: "stagredis.mercorinfra.com:6379"
+  db: 0
+
+postgresql:
+  debugMode: true
+  database: "crud"
+  maxOpenConns: 15
+  maxIdleConns: 8
+  master:
+    host: "0.0.0.0"
+    port: "5433"
+    username: "admin"
+    password: "admin"
+  slaves:
+    hosts: "0.0.0.0"
+    port: "5433"
+    username: "admin"
+    password: "admin"
+
+authentication:
+  rsaPublicKey: "RSA PUBLIC KEY"

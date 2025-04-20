@@ -1,0 +1,41 @@
+version: "3.8"
+services:
+  db:
+    image: postgres:latest
+    restart: always
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=crud
+
+  redis:
+    image: redis:5.0.3
+    restart: always
+    command: redis-server /etc/redis/redis.conf
+    ports:
+      - "7005:7005"
+    expose:
+      - "7005"
+    volumes:
+      - ./configs/redis.conf:/etc/redis/redis.conf
+      - ./data/redis:/var/lib/redis
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+  kafka:
+    image: wurstmeister/kafka
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_HOST_NAME: localhost
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CREATE_TOPICS: "Topic1:1:1,Topic2:1:1:compact"
